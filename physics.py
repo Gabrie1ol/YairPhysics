@@ -1,119 +1,182 @@
-import tkinter as tk
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <title>סימולציית חללית פוטונית</title>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            direction: rtl;
+        }
 
-# קבועים
-c = 3e8  # מהירות האור במטר לשנייה
+        canvas {
+            background-color: black;
+            display: block;
+            margin: 20px auto;
+        }
 
-class PhotonRocketSimulation:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("סימולציית חללית פוטונית")
+        .controls {
+            margin: 10px auto;
+            max-width: 600px;
+        }
 
-        # הגדלת גודל המסך
-        self.canvas_width = 2000  # רוחב גדול יותר
-        self.canvas_height = 600  # גובה גדול יותר
-        self.canvas = tk.Canvas(root, width=self.canvas_width, height=self.canvas_height, bg="black")
-        self.canvas.pack()
+        input {
+            width: 100px;
+        }
 
-        self.info = tk.Label(root, text="", font=("Arial", 12))
-        self.info.pack(pady=5)
+        label {
+            margin-left: 10px;
+        }
 
-        control_frame = tk.Frame(root)
-        control_frame.pack(pady=10)
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
 
-        # שדות קלט
-        tk.Label(control_frame, text="מסה (ק\"ג):").grid(row=0, column=0)
-        self.mass_entry = tk.Entry(control_frame)
-        self.mass_entry.insert(0, "1000")
-        self.mass_entry.grid(row=0, column=1)
+        #info {
+            margin-top: 10px;
+            font-size: 14px;
+            white-space: pre-line;
+        }
+    </style>
+</head>
+<body>
 
-        tk.Label(control_frame, text="שטח קליטה (מ\"ר):").grid(row=1, column=0)
-        self.area_entry = tk.Entry(control_frame)
-        self.area_entry.insert(0, "10")
-        self.area_entry.grid(row=1, column=1)
+<h1>🚀 סימולציית חללית פוטונית</h1>
 
-        tk.Label(control_frame, text="עוצמת אור (W/m²):").grid(row=2, column=0)
-        self.intensity_entry = tk.Entry(control_frame)
-        self.intensity_entry.insert(0, "1e8")
-        self.intensity_entry.grid(row=2, column=1)
+<canvas id="canvas" width="2000" height="600"></canvas>
 
-        tk.Label(control_frame, text="משך (שניות):").grid(row=3, column=0)
-        self.duration_entry = tk.Entry(control_frame)
-        self.duration_entry.insert(0, "20")
-        self.duration_entry.grid(row=3, column=1)
+<div class="controls">
+    <div>
+        <label>מסה (ק"ג):</label>
+        <input id="mass" type="number" value="1000">
+    </div>
+    <div>
+        <label>שטח קליטה (מ"ר):</label>
+        <input id="area" type="number" value="10">
+    </div>
+    <div>
+        <label>עוצמת אור (W/m²):</label>
+        <input id="intensity" type="number" value="1e8">
+    </div>
+    <div>
+        <label>משך (שניות):</label>
+        <input id="duration" type="number" value="20">
+    </div>
+    <button onclick="startSimulation()">🚀 התחל סימולציה</button>
+</div>
 
-        tk.Button(control_frame, text="🚀 התחל סימולציה", command=self.start_simulation).grid(row=4, column=0, columnspan=2, pady=5)
+<div id="info"></div>
 
-        self.dt = 0.1
-        self.simulating = False
+<script>
+    const c = 3e8;  // מהירות האור
 
-        # יחס מטרים לפיקסל
-        self.scale = 1e3  # 1000 מטר = פיקסל
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
 
-    def start_simulation(self):
-        try:
-            self.mass = float(self.mass_entry.get())
-            self.area = float(self.area_entry.get())
-            self.intensity = float(self.intensity_entry.get())
-            self.duration = float(self.duration_entry.get())
-        except ValueError:
-            self.info.config(text="יש להזין ערכים תקינים")
-            return
+    let mass, area, intensity, duration;
+    let t, velocity, position;
+    let dt = 0.1;
+    let simulating = false;
+    let trail = [];
+    let rocketY = 300;
+    const scale = 1e3;  // 1000 מטר לפיקסל
 
-        self.t = 0
-        self.velocity = 0
-        self.position = 0
-        self.simulating = True
+    function drawRocket(x) {
+        const y = rocketY;
 
-        self.canvas.delete("all")
-        self.trail = []
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        self.rocket_y = 300  # עדכון המיקום כדי להתאים למסך החדש
-        self.draw_rocket(10)
+        // Draw trail
+        ctx.fillStyle = "lightgray";
+        trail.forEach(([tx, ty]) => {
+            ctx.beginPath();
+            ctx.arc(tx, ty, 1, 0, 2 * Math.PI);
+            ctx.fill();
+        });
 
-        self.update_simulation()
+        // Draw rocket body
+        ctx.fillStyle = "white";
+        ctx.fillRect(x - 15, y - 5, 30, 10);
 
-    def draw_rocket(self, x):
-        y = self.rocket_y
+        // Top wing
+        ctx.fillStyle = "gray";
+        ctx.beginPath();
+        ctx.moveTo(x - 5, y - 5);
+        ctx.lineTo(x - 15, y - 15);
+        ctx.lineTo(x - 10, y - 5);
+        ctx.closePath();
+        ctx.fill();
 
-        if hasattr(self, 'rocket_parts'):
-            for part in self.rocket_parts:
-                self.canvas.delete(part)
+        // Bottom wing
+        ctx.beginPath();
+        ctx.moveTo(x - 5, y + 5);
+        ctx.lineTo(x - 15, y + 15);
+        ctx.lineTo(x - 10, y + 5);
+        ctx.closePath();
+        ctx.fill();
 
-        # ציור "חללית שטסה ימינה" (חרטום לימין)
-        body = self.canvas.create_rectangle(x - 15, y - 5, x + 15, y + 5, fill="white", outline="")
-        top_wing = self.canvas.create_polygon(x - 5, y - 5, x - 15, y - 15, x - 10, y - 5, fill="gray")
-        bottom_wing = self.canvas.create_polygon(x - 5, y + 5, x - 15, y + 15, x - 10, y + 5, fill="gray")
-        nose = self.canvas.create_polygon(x + 15, y - 5, x + 15, y + 5, x + 25, y, fill="red")
+        // Nose
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.moveTo(x + 15, y - 5);
+        ctx.lineTo(x + 15, y + 5);
+        ctx.lineTo(x + 25, y);
+        ctx.closePath();
+        ctx.fill();
+    }
 
-        self.rocket_parts = [body, top_wing, bottom_wing, nose]
+    function updateSimulation() {
+        if (simulating && t <= duration) {
+            const acceleration = (intensity * area) / (mass * c);
 
-    def update_simulation(self):
-        if self.simulating and self.t <= self.duration:
-            acceleration = (self.intensity * self.area) / (self.mass * c)
+            velocity += acceleration * dt;
+            position += velocity * dt;
+            t += dt;
 
-            self.velocity += acceleration * self.dt
-            self.position += self.velocity * self.dt
-            self.t += self.dt
+            const x = 10 + position * scale;
+            trail.push([x - 15, rocketY]);
+            if (trail.length > 100) trail.shift();
 
-            x = 10 + self.position * self.scale
+            drawRocket(x);
 
-            self.draw_rocket(x)
+            document.getElementById("info").textContent =
+                `זמן: ${t.toFixed(1)} שניות | מהירות: ${velocity.toFixed(3)} m/s`;
 
-            self.trail.append((x - 15, self.rocket_y))
-            for tx, ty in self.trail[-20:]:
-                self.canvas.create_oval(tx - 1, ty - 1, tx + 1, ty + 1, fill="lightgray", outline="lightgray")
+            requestAnimationFrame(updateSimulation);
+        } else {
+            simulating = false;
+            document.getElementById("info").textContent += "\n✔️ סימולציה הסתיימה!";
+        }
+    }
 
-            self.info.config(
-                text=f"זמן: {self.t:.1f} שניות | מהירות: {self.velocity:.3f} m/s"
-            )
+    function startSimulation() {
+        mass = parseFloat(document.getElementById("mass").value);
+        area = parseFloat(document.getElementById("area").value);
+        intensity = parseFloat(document.getElementById("intensity").value);
+        duration = parseFloat(document.getElementById("duration").value);
 
-            self.root.after(int(self.dt * 1000), self.update_simulation)
-        else:
-            self.simulating = False
-            self.info.config(text=self.info.cget("text") + "\n✔️ סימולציה הסתיימה!")
+        if (isNaN(mass) || isNaN(area) || isNaN(intensity) || isNaN(duration)) {
+            document.getElementById("info").textContent = "יש להזין ערכים תקינים";
+            return;
+        }
 
-# הפעלת התוכנית
-root = tk.Tk()
-app = PhotonRocketSimulation(root)
-root.mainloop()
+        t = 0;
+        velocity = 0;
+        position = 0;
+        simulating = true;
+        trail = [];
 
+        drawRocket(10);
+        updateSimulation();
+    }
+</script>
+
+</body>
+</html>
